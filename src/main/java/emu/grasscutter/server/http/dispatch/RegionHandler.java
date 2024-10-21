@@ -254,97 +254,109 @@ public final class RegionHandler implements Router {
      */
     private static void queryCurrentRegion(Context ctx) {
         // Get region to query.
-        String regionName = ctx.pathParam("region");
         String versionName = ctx.queryParam("version");
-        var region = regions.get(regionName);
-
-        // Get region data.
-        String regionData = "CAESGE5vdCBGb3VuZCB2ZXJzaW9uIGNvbmZpZw==";
-        if (!ctx.queryParamMap().values().isEmpty()) {
-            if (region != null) regionData = region.getBase64();
-        }
-
-        var clientVersion = versionName.replaceAll(Pattern.compile("[a-zA-Z]").pattern(), "");
-        var versionCode = clientVersion.split("\\.");
-        var versionMajor = Integer.parseInt(versionCode[0]);
-        var versionMinor = Integer.parseInt(versionCode[1]);
-        var versionFix = Integer.parseInt(versionCode[2]);
-
-        if (versionMajor >= 3
-                || (versionMajor == 2 && versionMinor == 7 && versionFix >= 50)
-                || (versionMajor == 2 && versionMinor == 8)) {
-            try {
-                QueryCurrentRegionEvent event = new QueryCurrentRegionEvent(regionData);
-                event.call();
-
-                String key_id = ctx.queryParam("key_id");
-
-                if (versionMajor != GameConstants.VERSION_PARTS[0]
-                        || versionMinor != GameConstants.VERSION_PARTS[1]
-                // The 'fix' or 'patch' version is not checked because it is only used
-                // when miHoYo is desperate and fucks up big time.
-                ) { // Reject clients when there is a version mismatch
-
-                    boolean updateClient = GameConstants.VERSION.compareTo(clientVersion) > 0;
-
-                    QueryCurrRegionHttpRsp rsp =
-                            QueryCurrRegionHttpRsp.newBuilder()
-                                    .setRetcode(Retcode.RET_STOP_SERVER_VALUE)
-                                    .setMsg("Connection Failed!")
-                                    .setRegionInfo(RegionInfo.newBuilder())
-                                    .setStopServer(
-                                            StopServerInfo.newBuilder()
-                                                    .setUrl("https://discord.gg/T5vZU6UyeG")
-                                                    .setStopBeginTime((int) Instant.now().getEpochSecond())
-                                                    .setStopEndTime((int) Instant.now().getEpochSecond() + 1)
-                                                    .setContentMsg(
-                                                            updateClient
-                                                                    ? "\nVersion mismatch outdated client! \n\nServer version: %s\nClient version: %s"
-                                                                            .formatted(GameConstants.VERSION, clientVersion)
-                                                                    : "\nVersion mismatch outdated server! \n\nServer version: %s\nClient version: %s"
-                                                                            .formatted(GameConstants.VERSION, clientVersion))
-                                                    .build())
-                                    .buildPartial();
-
-                    Grasscutter.getLogger()
-                            .debug(
-                                    String.format(
-                                            "Connection denied for %s due to %s.",
-                                            Utils.address(ctx), updateClient ? "outdated client!" : "outdated server!"));
-
-                    ctx.json(Crypto.encryptAndSignRegionData(rsp.toByteArray(), key_id));
-                    return;
+        // Log to console.
+        if (!Grasscutter.getConfig().server.game.useXorEncryption) {
+            if (versionName != null) {
+                if (versionName.startsWith("CN")) {
+                    ctx.result("{\"content\":\"v4ODcIe6c8I+UGyDOIzudWuTk+DcH4znJAdvK7oksJg77KetHm9hbFXmUc5mDUy72ovfOCNoW+Ln8GRwitL/6fliDFSP/6P92wv+5b+/u2Yk6ShuGMi7XBDMZkVbun1bTqck+2hOb/zEKMfYmlbCpnTvIfFIU23PxNDEgVvGKFfdiFnQP24SK2/iN6tpzaKVnT/c26GJD6mZv76ipcUtS9+agWv5ntaiYYd1BW7VmWp6Me1ujS9wViTs/1WsPDOezhKtn2fisweFCscko5WW4rkuUXaJ+qeCVUnV/+tgkLPA7J7NwwleE2IbkmLpXnOmHAsxUzwnSFt9QKTAitJ49A==\",\"sign\":\"ZF7e0DvBxozhNCQ4zNvfO3dOgN5X3vn4/FuPSEWYY9bfmuJQL39alQPZgX+l9WI62haIswUBk1NjzwMIOo074mxv8pAbJsEGzwHdF7cwS5Mv3yRvdNsX20mClkrpNd9VWjbyXquX8LxZ52lDigAsHkEBoITcWHVt28uFWRSuhq9GznGS7A7Fo2XLbNi8qqNvtIRDCRk+p7/qFDyABXayr4rVDot8NtOrspmt5P77OCm870IxXUhMwfpiBd3mbS/cC8FbnztU8LxdyhHAmO2aaJcLobBuwtmnki3PyYOddOwBPu8Vi7wQaeEVq1uDUWTOXE30tVXZkFnAEV+YGFzStQ==\"}");
+                } else {
+                    ctx.result("{\"content\":\"Gw9hSPdjoJe34l9OC58Q+/qfzt5R8DkJYkg1plgG0ZAGUkrZbJhnPD9htFxBTR0tXSQJA3chVLsIgr55GY+J27k8P3HKkj6sQsZ2isRTqqQnLZKruHCLZmrWmbhmx3ioh3mbo7OHJd1V+s7W/HSHe7mknUC9xKKqYHBnpYKBE5m5afUc3mlUqxFbwfZpOIItlnBWqxiXJqI3M7ux1Go4Fs0ZSvstvxw4lGTYUyLtBG1b/tMpahUAazG0G+WJbU22JOY7JRGlXXU+LaJPTqAHksFF7Hj1tOdQnw0clNbe62nyjObdixJxkRhKsxBory1OJQqZVA8z5ZeZn7hXzzkeRQ==\",\"sign\":\"AW6F2n8+EobiwQ3ZHeW3xHR9krFDpseGewxTA9yfreWLCmoXG5bXRDp60oO464VSeEFT885yOqwidLeE2umA4TGXcRu0aJBGT/7Olse6l5M4LyltuL/xIlPMUC/pq0dMmG3fY13NfgFFfd9rQ3vuY3QuH8J+XsKBkicFrpyqd9QvtxiQe3GHqIW7AobARmIYzdhuBG5fFtxe/scKUxTh1UUtbT8BTpUO7VcaXFBxXqva5ghUiKa1a7QoEMVL232D8t6nz74KOeZKZCcn8bGbO4PzkbcfkDmGL0fuEbhgh5e2+w+NQpAsX5TdO7NCYR8dKP+alTHnaeCdqXPkcauAAg==\"}");
                 }
-
-                if (ctx.queryParam("dispatchSeed") == null) {
-                    // More love for UA Patch players
-                    var rsp = new QueryCurRegionRspJson();
-
-                    rsp.content = event.getRegionInfo();
-                    rsp.sign = "TW9yZSBsb3ZlIGZvciBVQSBQYXRjaCBwbGF5ZXJz";
-
-                    ctx.json(rsp);
-                    return;
-                }
-
-                var regionInfo = Utils.base64Decode(event.getRegionInfo());
-
-                ctx.json(Crypto.encryptAndSignRegionData(regionInfo, key_id));
-            } catch (Exception e) {
-                Grasscutter.getLogger().error("An error occurred while handling query_cur_region.", e);
+            } else {
+                ctx.result("{\"content\":\"Gw9hSPdjoJe34l9OC58Q+/qfzt5R8DkJYkg1plgG0ZAGUkrZbJhnPD9htFxBTR0tXSQJA3chVLsIgr55GY+J27k8P3HKkj6sQsZ2isRTqqQnLZKruHCLZmrWmbhmx3ioh3mbo7OHJd1V+s7W/HSHe7mknUC9xKKqYHBnpYKBE5m5afUc3mlUqxFbwfZpOIItlnBWqxiXJqI3M7ux1Go4Fs0ZSvstvxw4lGTYUyLtBG1b/tMpahUAazG0G+WJbU22JOY7JRGlXXU+LaJPTqAHksFF7Hj1tOdQnw0clNbe62nyjObdixJxkRhKsxBory1OJQqZVA8z5ZeZn7hXzzkeRQ==\",\"sign\":\"AW6F2n8+EobiwQ3ZHeW3xHR9krFDpseGewxTA9yfreWLCmoXG5bXRDp60oO464VSeEFT885yOqwidLeE2umA4TGXcRu0aJBGT/7Olse6l5M4LyltuL/xIlPMUC/pq0dMmG3fY13NfgFFfd9rQ3vuY3QuH8J+XsKBkicFrpyqd9QvtxiQe3GHqIW7AobARmIYzdhuBG5fFtxe/scKUxTh1UUtbT8BTpUO7VcaXFBxXqva5ghUiKa1a7QoEMVL232D8t6nz74KOeZKZCcn8bGbO4PzkbcfkDmGL0fuEbhgh5e2+w+NQpAsX5TdO7NCYR8dKP+alTHnaeCdqXPkcauAAg==\"}");
             }
         } else {
-            // Invoke event.
-            QueryCurrentRegionEvent event = new QueryCurrentRegionEvent(regionData);
-            event.call();
-            // Respond with event result.
-            ctx.result(event.getRegionInfo());
+            String regionName = ctx.pathParam("region");
+            var region = regions.get(regionName);
+
+            // Get region data.
+            String regionData = "CAESGE5vdCBGb3VuZCB2ZXJzaW9uIGNvbmZpZw==";
+            if (!ctx.queryParamMap().values().isEmpty()) {
+                if (region != null) regionData = region.getBase64();
+            }
+
+            var clientVersion = versionName.replaceAll(Pattern.compile("[a-zA-Z]").pattern(), "");
+            var versionCode = clientVersion.split("\\.");
+            var versionMajor = Integer.parseInt(versionCode[0]);
+            var versionMinor = Integer.parseInt(versionCode[1]);
+            var versionFix = Integer.parseInt(versionCode[2]);
+
+            if (versionMajor >= 3
+                || (versionMajor == 2 && versionMinor == 7 && versionFix >= 50)
+                || (versionMajor == 2 && versionMinor == 8)) {
+                try {
+                    QueryCurrentRegionEvent event = new QueryCurrentRegionEvent(regionData);
+                    event.call();
+
+                    String key_id = ctx.queryParam("key_id");
+
+                    if (versionMajor != GameConstants.VERSION_PARTS[0]
+                        || versionMinor != GameConstants.VERSION_PARTS[1]
+                        // The 'fix' or 'patch' version is not checked because it is only used
+                        // when miHoYo is desperate and fucks up big time.
+                    ) { // Reject clients when there is a version mismatch
+
+                        boolean updateClient = GameConstants.VERSION.compareTo(clientVersion) > 0;
+
+                        QueryCurrRegionHttpRsp rsp =
+                            QueryCurrRegionHttpRsp.newBuilder()
+                                .setRetcode(Retcode.RET_STOP_SERVER_VALUE)
+                                .setMsg("Connection Failed!")
+                                .setRegionInfo(RegionInfo.newBuilder())
+                                .setStopServer(
+                                    StopServerInfo.newBuilder()
+                                        .setUrl("https://discord.gg/T5vZU6UyeG")
+                                        .setStopBeginTime((int) Instant.now().getEpochSecond())
+                                        .setStopEndTime((int) Instant.now().getEpochSecond() + 1)
+                                        .setContentMsg(
+                                            updateClient
+                                                ? "\nVersion mismatch outdated client! \n\nServer version: %s\nClient version: %s"
+                                                .formatted(GameConstants.VERSION, clientVersion)
+                                                : "\nVersion mismatch outdated server! \n\nServer version: %s\nClient version: %s"
+                                                .formatted(GameConstants.VERSION, clientVersion))
+                                        .build())
+                                .buildPartial();
+
+                        Grasscutter.getLogger()
+                            .debug(
+                                String.format(
+                                    "Connection denied for %s due to %s.",
+                                    Utils.address(ctx), updateClient ? "outdated client!" : "outdated server!"));
+
+                        ctx.json(Crypto.encryptAndSignRegionData(rsp.toByteArray(), key_id));
+                        return;
+                    }
+
+                    if (ctx.queryParam("dispatchSeed") == null) {
+                        // More love for UA Patch players
+                        var rsp = new QueryCurRegionRspJson();
+
+                        rsp.content = event.getRegionInfo();
+                        rsp.sign = "TW9yZSBsb3ZlIGZvciBVQSBQYXRjaCBwbGF5ZXJz";
+
+                        ctx.json(rsp);
+                        return;
+                    }
+
+                    var regionInfo = Utils.base64Decode(event.getRegionInfo());
+
+                    ctx.json(Crypto.encryptAndSignRegionData(regionInfo, key_id));
+                } catch (Exception e) {
+                    Grasscutter.getLogger().error("An error occurred while handling query_cur_region.", e);
+                }
+            } else {
+                // Invoke event.
+                QueryCurrentRegionEvent event = new QueryCurrentRegionEvent(regionData);
+                event.call();
+                // Respond with event result.
+                ctx.result(event.getRegionInfo());
+            }
         }
-        // Log to console.
         Grasscutter.getLogger()
-                .info(
-                        String.format(
-                                "Client %s request: query_cur_region/%s", Utils.address(ctx), regionName));
+            .info(
+                String.format(
+                    "Client %s request: query_cur_region/%s", Utils.address(ctx), ""));
     }
 
     /** Region data container. */
